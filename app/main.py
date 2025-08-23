@@ -7,17 +7,22 @@ import logging
 from collections import defaultdict
 import datetime
 
+# Create FastAPI app
 app = FastAPI()
 
+# CORS for frontend hosted on Vercel
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://ml-frontend.vercel.app"],
+    allow_origins=["https://ml-frontend.vercel.app"],  # Replace with your actual Vercel domain
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Setup logging
+# Load model
+model = joblib.load("model.pkl")
+
+# Set up logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(message)s",
@@ -27,37 +32,22 @@ logging.basicConfig(
     ]
 )
 
-# Load model
-model = joblib.load("model.pkl")
-
-# Track predictions
-prediction_counts = defaultdict(int)
-prediction_log = []
-
+# Input schema
 class InputData(BaseModel):
     features: list
 
+# In-memory logs for metrics
+prediction_counts = defaultdict(int)
+prediction_log = []
+
+# Prediction route
 @app.post("/predict")
 def predict(data: InputData):
     X = np.array(data.features).reshape(1, -1)
     prediction = model.predict(X)
     pred = int(prediction[0])
 
-    # Log and track
+    # Logging and metrics
     prediction_counts[pred] += 1
     prediction_log.append({
-        "timestamp": datetime.datetime.now().isoformat(),
-        "input": data.features,
-        "prediction": pred
-    })
-
-    logging.info(f"Prediction: {pred} for input: {data.features}")
-    return {"prediction": pred}
-
-@app.get("/metrics")
-def get_metrics():
-    return {
-        "total_predictions": sum(prediction_counts.values()),
-        "prediction_distribution": prediction_counts,
-        "log": prediction_log[-10:]  # Last 10 predictions
-    }
+        "timestamp": datetime.datetime.now().isoform
