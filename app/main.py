@@ -5,13 +5,15 @@ import joblib
 import numpy as np
 import logging
 
-# 🔹 Create FastAPI app
+from fastapi.middleware.cors import CORSMiddleware
+
+# Create FastAPI app
 app = FastAPI()
 
-# 🔹 Add CORS middleware (required to connect with your frontend)
+# ✅ Update this section:
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Replace "*" with your frontend URL later for security
+    allow_origins=["https://ml-frontend.vercel.app"],  # Replace with your actual Vercel domain if different
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
