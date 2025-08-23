@@ -9,6 +9,12 @@ import datetime
 
 # Create FastAPI app
 app = FastAPI()
+from fastapi import FastAPI
+
+
+@app.get("/")
+def read_root():
+    return {"message": "FastAPI is running! Use /predict or /metrics endpoints."}
 
 # CORS for frontend hosted on Vercel
 app.add_middleware(
