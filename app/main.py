@@ -4,35 +4,60 @@ from pydantic import BaseModel
 import joblib
 import numpy as np
 import logging
+from collections import defaultdict
+import datetime
 
-from fastapi.middleware.cors import CORSMiddleware
-
-# Create FastAPI app
 app = FastAPI()
 
-# ✅ Update this section:
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://ml-frontend.vercel.app"],  # Replace with your actual Vercel domain if different
+    allow_origins=["https://ml-frontend.vercel.app"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# 🔹 Set up logging
-logging.basicConfig(level=logging.INFO)
+# Setup logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s",
+    handlers=[
+        logging.FileHandler("app.log"),
+        logging.StreamHandler()
+    ]
+)
 
-# 🔹 Load your trained model
+# Load model
 model = joblib.load("model.pkl")
 
-# 🔹 Define input schema
+# Track predictions
+prediction_counts = defaultdict(int)
+prediction_log = []
+
 class InputData(BaseModel):
     features: list
 
-# 🔹 Define prediction endpoint
 @app.post("/predict")
 def predict(data: InputData):
     X = np.array(data.features).reshape(1, -1)
     prediction = model.predict(X)
-    logging.info(f"Input: {data.features} → Prediction: {prediction[0]}")
-    return {"prediction": int(prediction[0])}
+    pred = int(prediction[0])
+
+    # Log and track
+    prediction_counts[pred] += 1
+    prediction_log.append({
+        "timestamp": datetime.datetime.now().isoformat(),
+        "input": data.features,
+        "prediction": pred
+    })
+
+    logging.info(f"Prediction: {pred} for input: {data.features}")
+    return {"prediction": pred}
+
+@app.get("/metrics")
+def get_metrics():
+    return {
+        "total_predictions": sum(prediction_counts.values()),
+        "prediction_distribution": prediction_counts,
+        "log": prediction_log[-10:]  # Last 10 predictions
+    }
