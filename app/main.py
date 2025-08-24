@@ -5,62 +5,75 @@ import joblib
 import numpy as np
 from datetime import datetime
 from collections import defaultdict
+import json
+import os
 
 app = FastAPI()
 
-# Allow frontend (Vercel) to access API
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # For production, restrict this to your Vercel domain
+    allow_origins=["*"],  # Restrict in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Load model
 model = joblib.load("model.pkl")
 
-# For observability
-total_predictions = 0
-prediction_distribution = defaultdict(int)
-log = []
+# File to persist metrics
+METRICS_FILE = "metrics.json"
 
-# Input schema
+# Load metrics if file exists
+def load_metrics():
+    if os.path.exists(METRICS_FILE):
+        with open(METRICS_FILE, "r") as f:
+            return json.load(f)
+    else:
+        return {
+            "total_predictions": 0,
+            "prediction_distribution": {},
+            "log": []
+        }
+
+# Save metrics to file
+def save_metrics(data):
+    with open(METRICS_FILE, "w") as f:
+        json.dump(data, f)
+
+metrics = load_metrics()
+
 class InputData(BaseModel):
     features: list
 
-# Root endpoint (for testing)
 @app.get("/")
-def read_root():
+def root():
     return {"message": "FastAPI is running! Use /predict or /metrics endpoints."}
 
-# Prediction endpoint
 @app.post("/predict")
 def predict(data: InputData):
-    global total_predictions, prediction_distribution, log
+    global metrics
 
     X = np.array(data.features).reshape(1, -1)
     prediction = int(model.predict(X)[0])
 
     # Update metrics
-    total_predictions += 1
-    prediction_distribution[str(prediction)] += 1
-    log.append({
+    metrics["total_predictions"] += 1
+    pred_str = str(prediction)
+    metrics["prediction_distribution"][pred_str] = metrics["prediction_distribution"].get(pred_str, 0) + 1
+    metrics["log"].append({
         "timestamp": datetime.utcnow().isoformat(),
         "input": data.features,
         "prediction": prediction
     })
 
-    # Limit log to last 20 entries
-    log = log[-20:]
+    # Keep only recent 20
+    metrics["log"] = metrics["log"][-20:]
+
+    # Save to file
+    save_metrics(metrics)
 
     return {"prediction": prediction}
 
-# Metrics endpoint
 @app.get("/metrics")
 def get_metrics():
-    return {
-        "total_predictions": total_predictions,
-        "prediction_distribution": dict(prediction_distribution),
-        "log": log
-    }
+    return metrics
